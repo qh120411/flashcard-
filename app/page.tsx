@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cards, Rating } from "./data";
 
 type Review = { word:string; rating:Rating; at:string };
+type Account = { displayName:string; email:string };
 const labels = { forgot:"Quên", hard:"Khó", remembered:"Nhớ" };
 const DAILY_GOAL = 10;
 const DAY_COUNT=Math.ceil(cards.length/DAILY_GOAL);
@@ -22,9 +23,12 @@ export default function Home() {
   const [view,setView] = useState<"study"|"calendar">("study");
   const [calendarYear,setCalendarYear] = useState(new Date().getFullYear());
   const [ready,setReady] = useState(false);
+  const [account,setAccount] = useState<Account|null>(null);
+  const [authChecked,setAuthChecked] = useState(false);
+  const [saveState,setSaveState] = useState<"idle"|"saving"|"saved"|"error">("idle");
 
-  useEffect(()=>{ try { const today=dateKey(new Date());setRatings(JSON.parse(localStorage.getItem("wordly-ratings-v2")||"{}"));setHistory(JSON.parse(localStorage.getItem("wordly-history-v2")||"[]"));setStartDate(localStorage.getItem("wordly-start-date")||today);setSelectedDate(today); } catch {} setReady(true); },[]);
-  useEffect(()=>{ if(ready){ localStorage.setItem("wordly-ratings-v2",JSON.stringify(ratings));localStorage.setItem("wordly-history-v2",JSON.stringify(history));localStorage.setItem("wordly-start-date",startDate); } },[ratings,history,startDate,ready]);
+  useEffect(()=>{let active=true;const today=dateKey(new Date());setSelectedDate(today);fetch("/api/progress").then(async response=>{if(!active)return;if(response.status===401){setStartDate(today);setAuthChecked(true);setReady(true);return}if(!response.ok)throw new Error("load failed");const data=await response.json();if(!active)return;setAccount(data.user);setRatings(data.progress.ratings||{});setHistory(data.progress.history||[]);setStartDate(data.progress.startDate||today);setAuthChecked(true);setReady(true)}).catch(()=>{if(active){setStartDate(today);setAuthChecked(true);setReady(true);setSaveState("error")}});return()=>{active=false}},[]);
+  useEffect(()=>{if(!ready||!account||!startDate)return;setSaveState("saving");const timer=setTimeout(()=>{fetch("/api/progress",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({ratings,history,startDate})}).then(response=>{if(!response.ok)throw new Error("save failed");setSaveState("saved")}).catch(()=>setSaveState("error"))},350);return()=>clearTimeout(timer)},[ratings,history,startDate,ready,account]);
 
   const selectedDayIndex=startDate&&selectedDate?dayDiff(fromDateKey(selectedDate),fromDateKey(startDate)):0;
   const dailyCards=useMemo(()=>selectedDayIndex>=0&&selectedDayIndex<DAY_COUNT?cards.slice(selectedDayIndex*DAILY_GOAL,(selectedDayIndex+1)*DAILY_GOAL):[],[selectedDayIndex]);
@@ -58,10 +62,11 @@ export default function Home() {
     <header className="topbar">
       <a className="brand" href="#top"><b>W</b><span>Wordly</span></a>
       <div className="progress"><span><b>Tiến độ hôm nay</b><small>{reviewedToday}/{DAILY_GOAL} từ</small></span><i><em style={{width:`${reviewedToday/DAILY_GOAL*100}%`}}/></i></div>
-      <div className="profile"><span>🔥 <b>{history.length?3:0}</b> ngày</span><i>QA</i></div>
+      <div className="profile"><span>{account?(saveState==="saving"?"Đang lưu…":saveState==="error"?"Lỗi lưu dữ liệu":"✓ Đã lưu riêng"):"Chưa đăng nhập"}</span>{account?<a className="account" href="/signout-with-chatgpt?return_to=/" title={account.email}><i>{account.displayName.slice(0,2).toUpperCase()}</i><small>Đăng xuất</small></a>:<a className="signin" href="/signin-with-chatgpt?return_to=/">Đăng nhập</a>}</div>
     </header>
 
-    <div className="workspace" id="top">
+    {!account&&authChecked&&<section className="auth-banner"><div><b>Lưu tiến độ theo tài khoản</b><span>Đăng nhập để lịch học và kết quả được lưu riêng, đồng bộ trên mọi thiết bị.</span></div><a href="/signin-with-chatgpt?return_to=/">Đăng nhập bằng ChatGPT</a></section>}
+    <div className={`workspace ${!account?"signed-out":""}`} id="top">
       <aside className="sidebar">
         <nav><button className={view==="study"?"active nav-button":"nav-button"} onClick={()=>setView("study")}>⌂ <span>Học từ</span></button><button className={view==="calendar"?"active nav-button":"nav-button"} onClick={()=>setView("calendar")}>▦ <span>Lịch học</span></button></nav>
         <section><h4>Bộ từ</h4>{topics.map(t=><button key={t} className={topic===t?"selected":""} onClick={()=>setTopic(t)}><span>{t}</span><b>{t==="Hôm nay"?dailyCards.length:t==="Từ còn nợ"?overdueCards.length:t==="Tất cả"?cards.length:cards.filter(c=>c.topic===t).length}</b></button>)}</section>
@@ -88,7 +93,7 @@ export default function Home() {
 
       <aside className="insights" id="history">
         <section className="stats"><header><div><small>{selectedDate===todayKey?"HÔM NAY":"NGÀY ĐANG CHỌN"}</small><h3>Thành tích của bạn</h3></div><b>✦</b></header><div className="numbers"><p><b>{new Set(selectedReviews.map(r=>r.word)).size}</b><span>Từ đã học ngày này</span></p><p><b>{remembered}</b><span>Đã nhớ tổng</span></p></div><div className="mastery"><span><b>Mức độ ghi nhớ</b><small>{mastery}%</small></span><i><em style={{width:`${mastery}%`}}/></i></div></section>
-        <section className="history"><header><h3>Lịch sử gần đây</h3>{history.length>0&&<button onClick={()=>{setRatings({});setHistory([])}}>Đặt lại</button>}</header>
+        <section className="history"><header><h3>Lịch sử gần đây</h3>{history.length>0&&<button onClick={()=>{setRatings({});setHistory([]);if(account)fetch("/api/progress",{method:"DELETE"})}}>Đặt lại</button>}</header>
           {history.length?<div>{history.slice(0,7).map((r,n)=><p key={r.at+n}><i className={r.rating}>{r.rating==="remembered"?"✓":r.rating==="hard"?"≈":"×"}</i><span><b>{r.word}</b><small>{new Intl.DateTimeFormat("vi-VN",{hour:"2-digit",minute:"2-digit"}).format(new Date(r.at))}</small></span><em>{labels[r.rating]}</em></p>)}</div>:<div className="history-empty"><b>↺</b><span>Lịch sử ôn sẽ xuất hiện ở đây.</span></div>}
         </section>
         <blockquote className="quote">“Giỏi từ vựng không đến từ học thật nhiều, mà từ việc gặp lại đúng lúc.”</blockquote>
