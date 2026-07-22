@@ -29,17 +29,21 @@ export default function Home() {
   const selectedDayIndex=startDate&&selectedDate?dayDiff(fromDateKey(selectedDate),fromDateKey(startDate)):0;
   const dailyCards=useMemo(()=>selectedDayIndex>=0&&selectedDayIndex<DAY_COUNT?cards.slice(selectedDayIndex*DAILY_GOAL,(selectedDayIndex+1)*DAILY_GOAL):[],[selectedDayIndex]);
   const dailyIds=useMemo(()=>new Set(dailyCards.map(card=>card.id)),[dailyCards]);
-  const topics=["Hôm nay","Tất cả",...Array.from(new Set(cards.map(c=>c.topic)))];
+  const todayKey=dateKey(new Date());
+  const todayPlanIndex=startDate?dayDiff(fromDateKey(todayKey),fromDateKey(startDate)):0;
+  const reviewedWords=useMemo(()=>new Set(history.map(item=>item.word)),[history]);
+  const overdueCards=useMemo(()=>todayPlanIndex>0?cards.slice(0,Math.min(todayPlanIndex*DAILY_GOAL,cards.length)).filter(card=>!reviewedWords.has(card.word)):[],[todayPlanIndex,reviewedWords]);
+  const overdueIds=useMemo(()=>new Set(overdueCards.map(card=>card.id)),[overdueCards]);
+  const topics=["Hôm nay","Từ còn nợ","Tất cả",...Array.from(new Set(cards.map(c=>c.topic)))];
   const filtered=useMemo(()=>cards.filter(c=>{
     const rating=ratings[c.id];
-    const inSelectedDeck=topic==="Hôm nay"?dailyIds.has(c.id):(topic==="Tất cả"||c.topic===topic);
+    const inSelectedDeck=topic==="Hôm nay"?dailyIds.has(c.id):topic==="Từ còn nợ"?overdueIds.has(c.id):(topic==="Tất cả"||c.topic===topic);
     return inSelectedDeck && (filter==="Tất cả"||(filter==="Chưa học"&&!rating)||(filter==="Đang học"&&(rating==="forgot"||rating==="hard"))||(filter==="Đã nhớ"&&rating==="remembered"));
-  }),[topic,filter,ratings,dailyIds]);
+  }),[topic,filter,ratings,dailyIds,overdueIds]);
   useEffect(()=>{setIndex(0);setFlipped(false)},[topic,filter]);
   const card=filtered[index%Math.max(filtered.length,1)];
   const learned=Object.keys(ratings).length;
   const remembered=Object.values(ratings).filter(v=>v==="remembered").length;
-  const todayKey=dateKey(new Date());
   const todayReviews=history.filter(item=>dateKey(new Date(item.at))===todayKey);
   const selectedReviews=history.filter(item=>dateKey(new Date(item.at))===selectedDate);
   const reviewedToday=new Set(todayReviews.map(item=>item.word)).size;
@@ -59,13 +63,13 @@ export default function Home() {
     <div className="workspace" id="top">
       <aside className="sidebar">
         <nav><button className={view==="study"?"active nav-button":"nav-button"} onClick={()=>setView("study")}>⌂ <span>Học từ</span></button><button className={view==="calendar"?"active nav-button":"nav-button"} onClick={()=>setView("calendar")}>▦ <span>Lịch học</span></button></nav>
-        <section><h4>Bộ từ</h4>{topics.map(t=><button key={t} className={topic===t?"selected":""} onClick={()=>setTopic(t)}><span>{t}</span><b>{t==="Hôm nay"?DAILY_GOAL:t==="Tất cả"?cards.length:cards.filter(c=>c.topic===t).length}</b></button>)}</section>
+        <section><h4>Bộ từ</h4>{topics.map(t=><button key={t} className={topic===t?"selected":""} onClick={()=>setTopic(t)}><span>{t}</span><b>{t==="Hôm nay"?dailyCards.length:t==="Từ còn nợ"?overdueCards.length:t==="Tất cả"?cards.length:cards.filter(c=>c.topic===t).length}</b></button>)}</section>
         <section className="statuses"><h4>Trạng thái</h4>{["Tất cả","Chưa học","Đang học","Đã nhớ"].map(s=><button key={s} className={filter===s?"selected":""} onClick={()=>setFilter(s)}><span>● {s}</span></button>)}</section>
         <p>Nguồn từ vựng<br/><b>Academic Word List</b></p>
       </aside>
 
       {view==="study"?<section className="study" id="study">
-        <div className="heading"><div><small>{topic==="Hôm nay"?`NGÀY ${selectedDayIndex+1} / ${DAY_COUNT} · ${selectedDate?new Intl.DateTimeFormat("vi-VN",{day:"2-digit",month:"long",year:"numeric"}).format(fromDateKey(selectedDate)):""}`:"BỘ TỪ HỌC THUẬT"}</small><h1>Học vừa đủ, nhớ thật lâu.</h1><p>{topic==="Hôm nay"?`Lộ trình ${cards.length} từ được chia đều, mỗi ngày tối đa ${DAILY_GOAL} từ.`:"Chạm vào thẻ để xem nghĩa, họ từ và ví dụ."}</p></div><span><b>{filtered.length}</b> từ trong bộ lọc</span></div>
+        <div className="heading"><div><small>{topic==="Hôm nay"?`NGÀY ${selectedDayIndex+1} / ${DAY_COUNT} · ${selectedDate?new Intl.DateTimeFormat("vi-VN",{day:"2-digit",month:"long",year:"numeric"}).format(fromDateKey(selectedDate)):""}`:topic==="Từ còn nợ"?"CÁC NGÀY ĐÃ BỎ LỠ":"BỘ TỪ HỌC THUẬT"}</small><h1>{topic==="Từ còn nợ"?"Học bù, không mất từ nào.":"Học vừa đủ, nhớ thật lâu."}</h1><p>{topic==="Hôm nay"?`Lộ trình ${cards.length} từ được chia đều, mỗi ngày tối đa ${DAILY_GOAL} từ.${overdueCards.length?` Bạn còn ${overdueCards.length} từ cần học bù.`:""}`:topic==="Từ còn nợ"?"Các từ chưa học từ những ngày trước được giữ lại tại đây.":"Chạm vào thẻ để xem nghĩa, họ từ và ví dụ."}</p></div><span><b>{filtered.length}</b> từ trong bộ lọc</span></div>
         {card ? <>
           <article className={`flashcard ${flipped?"flipped":""}`} onClick={()=>setFlipped(v=>!v)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setFlipped(v=>!v)}}>
             <div className="cardline"><span>{card.topic}</span><small>{index+1} / {filtered.length}</small></div>
