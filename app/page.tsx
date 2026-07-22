@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cards, Rating } from "./data";
 
 type Review = { word:string; rating:Rating; at:string };
-type Account = { displayName:string; email:string };
+type Account = { displayName:string; username:string };
 const labels = { forgot:"Quên", hard:"Khó", remembered:"Nhớ" };
 const DAILY_GOAL = 10;
 const DAY_COUNT=Math.ceil(cards.length/DAILY_GOAL);
@@ -26,6 +26,13 @@ export default function Home() {
   const [account,setAccount] = useState<Account|null>(null);
   const [authChecked,setAuthChecked] = useState(false);
   const [saveState,setSaveState] = useState<"idle"|"saving"|"saved"|"error">("idle");
+  const [authOpen,setAuthOpen] = useState(false);
+  const [authMode,setAuthMode] = useState<"login"|"register">("login");
+  const [username,setUsername] = useState("");
+  const [password,setPassword] = useState("");
+  const [confirmPassword,setConfirmPassword] = useState("");
+  const [authError,setAuthError] = useState("");
+  const [authBusy,setAuthBusy] = useState(false);
 
   useEffect(()=>{let active=true;const today=dateKey(new Date());setSelectedDate(today);fetch("/api/progress").then(async response=>{if(!active)return;if(response.status===401){setStartDate(today);setAuthChecked(true);setReady(true);return}if(!response.ok)throw new Error("load failed");const data=await response.json();if(!active)return;setAccount(data.user);setRatings(data.progress.ratings||{});setHistory(data.progress.history||[]);setStartDate(data.progress.startDate||today);setAuthChecked(true);setReady(true)}).catch(()=>{if(active){setStartDate(today);setAuthChecked(true);setReady(true);setSaveState("error")}});return()=>{active=false}},[]);
   useEffect(()=>{if(!ready||!account||!startDate)return;setSaveState("saving");const timer=setTimeout(()=>{fetch("/api/progress",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({ratings,history,startDate})}).then(response=>{if(!response.ok)throw new Error("save failed");setSaveState("saved")}).catch(()=>setSaveState("error"))},350);return()=>clearTimeout(timer)},[ratings,history,startDate,ready,account]);
@@ -57,15 +64,18 @@ export default function Home() {
   const speakWord=(word:string)=>{const voice=new SpeechSynthesisUtterance(word);const voices=window.speechSynthesis.getVoices();voice.lang="en-GB";voice.rate=.85;voice.voice=voices.find(item=>item.lang.toLowerCase()==="en-gb")||voices.find(item=>item.lang.toLowerCase().startsWith("en-"))||null;window.speechSynthesis.cancel();window.speechSynthesis.speak(voice)};
   const chooseDate=(key:string)=>{setSelectedDate(key);setTopic("Hôm nay");setFilter("Tất cả");setView("study")};
   const months=Array.from({length:12},(_,month)=>{const first=new Date(calendarYear,month,1);return {month,offset:(first.getDay()+6)%7,days:new Date(calendarYear,month+1,0).getDate()}});
+  const submitAuth=async(e:React.FormEvent)=>{e.preventDefault();setAuthBusy(true);setAuthError("");try{const response=await fetch(`/api/auth/${authMode}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({username,password,confirmPassword})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Không thể tiếp tục.");window.location.reload()}catch(error){setAuthError(error instanceof Error?error.message:"Không thể tiếp tục.");setAuthBusy(false)}};
+  const logout=async()=>{await fetch("/api/auth/logout",{method:"POST"});window.location.reload()};
 
   return <main>
     <header className="topbar">
       <a className="brand" href="#top"><b>W</b><span>Wordly</span></a>
       <div className="progress"><span><b>Tiến độ hôm nay</b><small>{reviewedToday}/{DAILY_GOAL} từ</small></span><i><em style={{width:`${reviewedToday/DAILY_GOAL*100}%`}}/></i></div>
-      <div className="profile"><span>{account?(saveState==="saving"?"Đang lưu…":saveState==="error"?"Lỗi lưu dữ liệu":"✓ Đã lưu riêng"):"Chưa đăng nhập"}</span>{account?<a className="account" href="/signout-with-chatgpt?return_to=/" title={account.email}><i>{account.displayName.slice(0,2).toUpperCase()}</i><small>Đăng xuất</small></a>:<a className="signin" href="/signin-with-chatgpt?return_to=/">Đăng nhập</a>}</div>
+      <div className="profile"><span>{account?(saveState==="saving"?"Đang lưu…":saveState==="error"?"Lỗi lưu dữ liệu":"✓ Đã lưu riêng"):"Chưa đăng nhập"}</span>{account?<button className="account" onClick={logout} title={account.username}><i>{account.displayName.slice(0,2).toUpperCase()}</i><small>Đăng xuất</small></button>:<button className="signin" onClick={()=>setAuthOpen(true)}>Đăng nhập</button>}</div>
     </header>
 
-    {!account&&authChecked&&<section className="auth-banner"><div><b>Lưu tiến độ theo tài khoản</b><span>Đăng nhập để lịch học và kết quả được lưu riêng, đồng bộ trên mọi thiết bị.</span></div><a href="/signin-with-chatgpt?return_to=/">Đăng nhập bằng ChatGPT</a></section>}
+    {!account&&authChecked&&<section className="auth-banner"><div><b>Lưu tiến độ theo tài khoản</b><span>Đăng nhập để lịch học và kết quả được lưu riêng, đồng bộ trên mọi thiết bị.</span></div><button onClick={()=>setAuthOpen(true)}>Đăng nhập / Đăng ký</button></section>}
+    {authOpen&&<div className="auth-overlay" role="dialog" aria-modal="true" aria-label={authMode==="login"?"Đăng nhập":"Đăng ký"} onMouseDown={e=>{if(e.target===e.currentTarget)setAuthOpen(false)}}><form className="auth-card" onSubmit={submitAuth}><button type="button" className="auth-close" onClick={()=>setAuthOpen(false)} aria-label="Đóng">×</button><small>WORDLY ACCOUNT</small><h2>{authMode==="login"?"Chào mừng trở lại":"Tạo tài khoản mới"}</h2><p>{authMode==="login"?"Đăng nhập để tiếp tục lộ trình của bạn.":"Tiến độ sẽ được lưu riêng cho tài khoản này."}</p><label>Tên tài khoản<input autoFocus autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} placeholder="Ví dụ: quang123" required minLength={3} maxLength={32}/></label><label>Mật khẩu<input type="password" autoComplete={authMode==="login"?"current-password":"new-password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Ít nhất 6 ký tự" required minLength={6} maxLength={72}/></label>{authMode==="register"&&<label>Nhập lại mật khẩu<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Nhập lại mật khẩu" required minLength={6} maxLength={72}/></label>}{authError&&<div className="auth-error">{authError}</div>}<button className="auth-submit" disabled={authBusy}>{authBusy?"Đang xử lý…":authMode==="login"?"Đăng nhập":"Đăng ký tài khoản"}</button><button type="button" className="auth-switch" onClick={()=>{setAuthMode(authMode==="login"?"register":"login");setAuthError("")}}>{authMode==="login"?"Chưa có tài khoản? Đăng ký":"Đã có tài khoản? Đăng nhập"}</button></form></div>}
     <div className={`workspace ${!account?"signed-out":""}`} id="top">
       <aside className="sidebar">
         <nav><button className={view==="study"?"active nav-button":"nav-button"} onClick={()=>setView("study")}>⌂ <span>Học từ</span></button><button className={view==="calendar"?"active nav-button":"nav-button"} onClick={()=>setView("calendar")}>▦ <span>Lịch học</span></button></nav>
