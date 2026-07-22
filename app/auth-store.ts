@@ -49,13 +49,18 @@ export async function database() {
 }
 
 export async function createSession(userId: string) {
-  await ensureTables();
-  const sql = sqlClient();
-  const token = randomBytes(32).toString("base64url");
-  const expires = new Date(Date.now() + SESSION_SECONDS * 1000);
-  await sql`INSERT INTO wordly_sessions (token_hash, user_id, expires_at) VALUES (${digest(token)}, ${userId}, ${expires})`;
-  const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_SECONDS });
+  try {
+    await ensureTables();
+    const sql = sqlClient();
+    const token = randomBytes(32).toString("base64url");
+    const expires = new Date(Date.now() + SESSION_SECONDS * 1000);
+    await sql`INSERT INTO wordly_sessions (token_hash, user_id, expires_at) VALUES (${digest(token)}, ${userId}, ${expires})`;
+    const jar = await cookies();
+    jar.set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_SECONDS });
+  } catch (error) {
+    console.error("WORDLY_SESSION_CREATE", error);
+    throw new Error("SESSION_CREATE_FAILED", { cause: error });
+  }
 }
 
 export async function currentUser() {

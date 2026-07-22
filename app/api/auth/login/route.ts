@@ -11,6 +11,8 @@ export async function POST(request: Request) {
     await createSession(String(user.id));
     return Response.json({ user: { username: String(user.username) } });
   } catch (error) {
-    return Response.json({ error: error instanceof Error && error.message === "DATABASE_URL_MISSING" ? "Database chưa được kết nối." : "Không thể đăng nhập lúc này." }, { status: 500 });
+    const code = error instanceof Error ? error.message : "LOGIN_FAILED";
+    console.error("WORDLY_LOGIN", error);
+    return Response.json({ error: code === "DATABASE_URL_MISSING" ? "Database chưa được kết nối." : "Không thể đăng nhập lúc này.", code }, { status: 500 });
   }
 }
