@@ -17,8 +17,7 @@ export async function POST(request: Request) {
     await createSession(id);
     return Response.json({ user: { username } }, { status: 201 });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "REGISTER_FAILED";
     console.error("WORDLY_REGISTER", error);
-    return Response.json({ error: code === "DATABASE_URL_MISSING" ? "Database chưa được kết nối." : "Không thể đăng ký lúc này.", code }, { status: 500 });
+    return Response.json({ error: error instanceof Error && error.message === "DATABASE_URL_MISSING" ? "Database chưa được kết nối." : "Không thể đăng ký lúc này." }, { status: 500 });
   }
 }
