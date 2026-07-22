@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import { hash } from "bcryptjs";
 import { createSession, database, randomUUID } from "../../../auth-store";
 
 export async function POST(request: Request) {
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const existing = await sql`SELECT 1 FROM wordly_users WHERE username = ${username} LIMIT 1`;
     if (existing.length) return Response.json({ error: "Tên tài khoản đã được sử dụng." }, { status: 409 });
     const id = randomUUID();
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await hash(password, 12);
     await sql`INSERT INTO wordly_users (id, username, password_hash) VALUES (${id}, ${username}, ${passwordHash})`;
     await createSession(id);
     return Response.json({ user: { username } }, { status: 201 });

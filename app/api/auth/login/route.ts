@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+import { compare } from "bcryptjs";
 import { createSession, database } from "../../../auth-store";
 
 export async function POST(request: Request) {
@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const username = raw?.trim().toLowerCase();
     const sql = await database();
     const [user] = await sql`SELECT id, username, password_hash FROM wordly_users WHERE username = ${username ?? ""} LIMIT 1`;
-    if (!user || typeof password !== "string" || !(await bcrypt.compare(password, String(user.password_hash)))) return Response.json({ error: "Sai tài khoản hoặc mật khẩu." }, { status: 401 });
+    if (!user || typeof password !== "string" || !(await compare(password, String(user.password_hash)))) return Response.json({ error: "Sai tài khoản hoặc mật khẩu." }, { status: 401 });
     await createSession(String(user.id));
     return Response.json({ user: { username: String(user.username) } });
   } catch (error) {
