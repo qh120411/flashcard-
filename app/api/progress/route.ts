@@ -8,8 +8,10 @@ export async function GET() {
     const user = await currentUser();
     if (!user) return unauthorized();
     const sql = await database();
-    const [row] = await sql`SELECT ratings, history, start_date FROM wordly_progress WHERE user_id = ${user.id} LIMIT 1`;
-    return Response.json({ user: { displayName: user.username, username: user.username }, progress: row ? { ratings: row.ratings, history: row.history, startDate: String(row.start_date).slice(0, 10) } : { ratings: {}, history: [], startDate: today() } });
+    const [row] = await sql`SELECT ratings, history, TO_CHAR(start_date, 'YYYY-MM-DD') AS start_date FROM wordly_progress WHERE user_id = ${user.id} LIMIT 1`;
+    const ratings = row ? (typeof row.ratings === "string" ? JSON.parse(row.ratings) : row.ratings) : {};
+    const history = row ? (typeof row.history === "string" ? JSON.parse(row.history) : row.history) : [];
+    return Response.json({ user: { displayName: user.username, username: user.username }, progress: row ? { ratings, history, startDate: row.start_date } : { ratings: {}, history: [], startDate: today() } });
   } catch {
     return Response.json({ error: "Database chưa được kết nối." }, { status: 503 });
   }
