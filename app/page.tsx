@@ -50,6 +50,7 @@ export default function Home() {
   const mastery=learned?Math.round(remembered/learned*100):0;
   const move=(n:number)=>{if(filtered.length){setIndex(i=>(i+n+filtered.length)%filtered.length);setFlipped(false)}};
   const rate=(rating:Rating)=>{if(!card)return;setRatings(r=>({...r,[card.id]:rating}));setHistory(h=>[{word:card.word,rating,at:new Date().toISOString()},...h].slice(0,2000));setTimeout(()=>{if(filter==="Chưa học"||(filter==="Đang học"&&rating==="remembered")){setIndex(i=>i%Math.max(filtered.length-1,1));setFlipped(false)}else move(1)},160)};
+  const speakWord=(word:string)=>{const voice=new SpeechSynthesisUtterance(word);const voices=window.speechSynthesis.getVoices();voice.lang="en-GB";voice.rate=.85;voice.voice=voices.find(item=>item.lang.toLowerCase()==="en-gb")||voices.find(item=>item.lang.toLowerCase().startsWith("en-"))||null;window.speechSynthesis.cancel();window.speechSynthesis.speak(voice)};
   const chooseDate=(key:string)=>{setSelectedDate(key);setTopic("Hôm nay");setFilter("Tất cả");setView("study")};
   const months=Array.from({length:12},(_,month)=>{const first=new Date(calendarYear,month,1);return {month,offset:(first.getDay()+6)%7,days:new Date(calendarYear,month+1,0).getDate()}});
 
@@ -73,7 +74,7 @@ export default function Home() {
         {card ? <>
           <article className={`flashcard ${flipped?"flipped":""}`} onClick={()=>setFlipped(v=>!v)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setFlipped(v=>!v)}}>
             <div className="cardline"><span>{card.topic}</span><small>{index+1} / {filtered.length}</small></div>
-            {!flipped?<div className="front"><small>{card.type}</small><h2>{card.word}</h2><p>{card.phonetic || `Academic Word List • ${card.topic}`}</p><button onClick={e=>{e.stopPropagation();speechSynthesis.speak(new SpeechSynthesisUtterance(card.word))}}>▶ Nghe phát âm</button><em>↻ Bấm để lật thẻ</em></div>
+            {!flipped?<div className="front"><small>{card.type}</small><h2>{card.word}</h2><p>{card.phonetic || `Academic Word List • ${card.topic}`}</p><button onClick={e=>{e.stopPropagation();speakWord(card.word)}}>▶ Nghe phát âm Anh</button><em>↻ Bấm để lật thẻ</em></div>
             :<div className="back"><section><small>NGHĨA TIẾNG VIỆT</small><h2>{card.meaning}</h2><p>{card.note}</p></section><section><small>HỌ TỪ</small><div>{card.family.map(x=><i key={x}>{x}</i>)}</div></section><blockquote><small>VÍ DỤ IELTS</small><p>“{card.example}”</p><span>{card.exampleVi}</span></blockquote><em>↻ Bấm để xem lại từ</em></div>}
           </article>
           <div className="controls"><button onClick={()=>move(-1)}>←</button><div><button className="forgot" onClick={()=>rate("forgot")}><i>×</i><b>Quên</b><small>Ôn lại sớm</small></button><button className="hard" onClick={()=>rate("hard")}><i>≈</i><b>Khó</b><small>Ôn ngày mai</small></button><button className="remember" onClick={()=>rate("remembered")}><i>✓</i><b>Nhớ</b><small>Ôn sau 3 ngày</small></button></div><button onClick={()=>move(1)}>→</button></div>
